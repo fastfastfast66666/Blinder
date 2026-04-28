@@ -54,6 +54,10 @@ public class HistoryService {
                 .toList();
     }
 
+    public synchronized List<HistoryItem> all() {
+        return List.copyOf(readAll());
+    }
+
     public synchronized HistoryItem append(String type, String title, String summary, String source, String spokenText) {
         HistoryItem item = new HistoryItem(
                 nextId.getAndIncrement(),
