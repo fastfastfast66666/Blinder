@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>毕设10 Backend</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Noto Sans SC", sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 48px 20px;
+        background: linear-gradient(135deg, #eef6ff, #f8fbff 55%, #eefcf7);
+        color: #16324f;
+      }
+      main {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 32px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: 0 24px 60px rgba(22, 50, 79, 0.12);
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 32px;
+      }
+      p {
+        line-height: 1.7;
+      }
+      ul {
+        padding-left: 20px;
+        line-height: 1.8;
+      }
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: #edf3fb;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>毕设10 后端已上线</h1>
+      <p>这是“面向视障人士的多模态情境感知资讯辅助系统”的最小后端服务。</p>
+      <ul>
+        <li><code>/api/health</code> 健康检查</li>
+        <li><code>/api/meta</code> 项目元信息</li>
+        <li><code>/api/news/recommendations</code> 资讯推荐占位接口</li>
+        <li><code>/api/vision/analyze</code> 识图播报占位接口</li>
+        <li><code>/api/history</code> 历史记录占位接口</li>
+      </ul>
+      <p>当前版本主要用于打通小程序和服务器链路，后续再逐步接入真实的定位、新闻和图像理解能力。</p>
+    </main>
+  </body>
+</html>

@@ -6,7 +6,8 @@ Microsoft/
 *.log
 *.out.log
 *.err.log
-*.html
+baidu_news_sample.html
+sogou_shanghai.html
 cp.txt
 temp-*.log
 application-local.properties
@@ -41,3 +42,14 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Frontend ###
+node_modules/
+dist/
+unpackage/
+.hbuilderx/
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
