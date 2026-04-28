@@ -50,7 +50,7 @@ public class NewsSourceClient {
 
     private static final ZoneOffset CHINA_OFFSET = ZoneOffset.ofHours(8);
     private static final long SEARCH_BLOCK_COOLDOWN_MILLIS = Duration.ofMinutes(10).toMillis();
-    private static final long FETCH_TIME_BUDGET_MILLIS = Duration.ofSeconds(5).toMillis();
+    private static final long FETCH_TIME_BUDGET_MILLIS = Duration.ofSeconds(10).toMillis();
     private static final int MAX_SEARCH_QUERIES_PER_SOURCE = 2;
     private static final int MAX_SEARCH_SOURCES_PER_REQUEST = 1;
     private static final DateTimeFormatter BAIDU_DATE_TIME = DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm");
@@ -122,7 +122,7 @@ public class NewsSourceClient {
         int effectiveLimit = Math.max(1, limit);
         List<NewsArticle> items = new ArrayList<>();
         Set<String> dedupeKeys = new LinkedHashSet<>();
-        List<NewsSourceConfig> sources = orderSourcesForFastResponse(enabledSources());
+        List<NewsSourceConfig> sources = orderSourcesForFastResponse(enabledSources(), normalizedScope, requireScopeMatch);
         if (sources.isEmpty()) {
             return List.of();
         }
@@ -189,7 +189,7 @@ public class NewsSourceClient {
     }
 
     private Duration newsRequestTimeout() {
-        return Duration.ofSeconds(Math.max(2, Math.min(3, properties.getTimeoutSeconds())));
+        return Duration.ofSeconds(Math.max(2, Math.min(8, properties.getTimeoutSeconds())));
     }
 
     private boolean timeBudgetExpired(long deadlineMillis) {
@@ -211,10 +211,21 @@ public class NewsSourceClient {
         return queries.subList(0, MAX_SEARCH_QUERIES_PER_SOURCE);
     }
 
-    private List<NewsSourceConfig> orderSourcesForFastResponse(List<NewsSourceConfig> sources) {
+    private boolean shouldRequireSearchScopeMatch(String scopeToken, String query, boolean requireScopeMatch) {
+        if (!requireScopeMatch) {
+            return false;
+        }
+        String normalizedScope = normalizeCityName(scopeToken);
+        if (normalizedScope.isBlank() || isGenericScope(normalizedScope)) {
+            return false;
+        }
+        return query == null || !query.contains(normalizedScope);
+    }
+
+    private List<NewsSourceConfig> orderSourcesForFastResponse(List<NewsSourceConfig> sources, String scopeToken, boolean requireScopeMatch) {
         List<NewsSourceConfig> ordered = new ArrayList<>(sources);
         ordered.sort((left, right) -> {
-            int rankCompare = Integer.compare(sourceSpeedRank(left), sourceSpeedRank(right));
+            int rankCompare = Integer.compare(sourceSpeedRank(left, scopeToken, requireScopeMatch), sourceSpeedRank(right, scopeToken, requireScopeMatch));
             if (rankCompare != 0) {
                 return rankCompare;
             }
@@ -227,8 +238,20 @@ public class NewsSourceClient {
         return ordered;
     }
 
-    private int sourceSpeedRank(NewsSourceConfig source) {
+    private int sourceSpeedRank(NewsSourceConfig source, String scopeToken, boolean requireScopeMatch) {
         String type = normalizedSourceType(source);
+        if (requireScopeMatch && !isGenericScope(scopeToken)) {
+            if ("SOGOU_SEARCH".equals(type)) {
+                return 0;
+            }
+            if ("BAIDU_SEARCH".equals(type)) {
+                return 1;
+            }
+            if ("RSS".equals(type)) {
+                return 2;
+            }
+            return 3;
+        }
         if ("RSS".equals(type)) {
             return 0;
         }
@@ -242,11 +265,12 @@ public class NewsSourceClient {
     }
 
     private List<NewsArticle> sortedLimited(List<NewsArticle> items, int limit) {
-        items.sort((left, right) -> comparePublishedAtDesc(left.publishedAt(), right.publishedAt()));
-        if (items.size() <= limit) {
-            return items;
+        List<NewsArticle> sorted = new ArrayList<>(items == null ? List.of() : items);
+        sorted.sort((left, right) -> comparePublishedAtDesc(left.publishedAt(), right.publishedAt()));
+        if (sorted.size() <= limit) {
+            return sorted;
         }
-        return new ArrayList<>(items.subList(0, limit));
+        return new ArrayList<>(sorted.subList(0, limit));
     }
 
     private List<NewsSourceConfig> enabledSources() {
@@ -333,7 +357,7 @@ public class NewsSourceClient {
             if (timeBudgetExpired(deadlineMillis)) {
                 break;
             }
-            FetchResult result = fetchFromBaidu(scopeToken, query, 0, requireScopeMatch);
+            FetchResult result = fetchFromBaidu(scopeToken, query, 0, shouldRequireSearchScopeMatch(scopeToken, query, requireScopeMatch));
             addAll(items, dedupeKeys, result.items());
             if (result.blocked()) {
                 markBaiduBlocked();
@@ -375,7 +399,8 @@ public class NewsSourceClient {
             if (timeBudgetExpired(deadlineMillis)) {
                 break;
             }
-            SearchFetchResult firstPage = fetchFromSogou(scopeToken, query, 1, requireScopeMatch);
+            boolean queryScoped = shouldRequireSearchScopeMatch(scopeToken, query, requireScopeMatch);
+            SearchFetchResult firstPage = fetchFromSogou(scopeToken, query, 1, queryScoped);
             addAll(items, dedupeKeys, firstPage.items());
             if (firstPage.unavailable()) {
                 markSogouBlocked();
@@ -384,7 +409,7 @@ public class NewsSourceClient {
             }
 
             if (items.size() < effectiveLimit && query.equals(queries.get(0)) && !timeBudgetExpired(deadlineMillis)) {
-                SearchFetchResult secondPage = fetchFromSogou(scopeToken, query, 2, requireScopeMatch);
+                SearchFetchResult secondPage = fetchFromSogou(scopeToken, query, 2, queryScoped);
                 addAll(items, dedupeKeys, secondPage.items());
                 if (secondPage.unavailable()) {
                     markSogouBlocked();

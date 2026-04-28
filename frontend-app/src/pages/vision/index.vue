@@ -408,6 +408,7 @@ export default {
       selectedScene: 'general',
       imageUrl: '',
       selectedUploadFile: null,
+      selectedUploadScene: '',
       sampleItems: fallbackSamples,
       activeSampleKey: '',
       result: buildFallbackResult('general'),
@@ -428,6 +429,7 @@ export default {
       targetPreview: '',
       caretBlinkTimer: null,
       caretVisible: true,
+      analysisRunId: 0,
     }
   },
   computed: {
@@ -553,6 +555,7 @@ export default {
     },
     prepareAnalysis() {
       stopVisionStream()
+      const runId = ++this.analysisRunId
       this.isAnalyzing = true
       this.lastError = ''
       this.streamState = {
@@ -563,6 +566,20 @@ export default {
       }
       this.resetTypewriter()
       this.ensureCaretBlink()
+      return runId
+    },
+    isCurrentAnalysis(runId) {
+      return runId === this.analysisRunId
+    },
+    clearCurrentImage() {
+      stopVisionStream()
+      this.analysisRunId += 1
+      this.isAnalyzing = false
+      this.imageUrl = ''
+      this.activeSampleKey = ''
+      this.selectedUploadFile = null
+      this.selectedUploadScene = ''
+      this.lastError = ''
     },
     handleStreamMeta(meta) {
       const scene = meta?.scene || this.selectedScene
@@ -666,24 +683,28 @@ export default {
       this.queueTypewriter(message)
     },
     async startJsonStreaming(payload) {
-      this.prepareAnalysis()
+      const runId = this.prepareAnalysis()
       try {
         if (canStreamVision()) {
           const result = await streamVisionJson(payload, {
-            onMeta: (meta) => this.handleStreamMeta(meta),
-            onStatus: (status) => this.handleStreamStatus(status),
-            onPreview: (preview) => this.handleStreamPreview(preview),
-            onResult: (data) => this.applyResultPayload(data),
+            onMeta: (meta) => this.isCurrentAnalysis(runId) && this.handleStreamMeta(meta),
+            onStatus: (status) => this.isCurrentAnalysis(runId) && this.handleStreamStatus(status),
+            onPreview: (preview) => this.isCurrentAnalysis(runId) && this.handleStreamPreview(preview),
+            onResult: (data) => this.isCurrentAnalysis(runId) && this.applyResultPayload(data),
           })
+          if (!this.isCurrentAnalysis(runId)) return
           this.applyResultPayload(result)
         } else {
           // 小程序 / App 等不支持 fetch 流的环境：直接调用非流式接口。
           this.markAnalyzing('识图分析', '正在分析图像，请稍候…')
           const res = await request('/api/vision/analyze', 'POST', payload || {})
+          if (!this.isCurrentAnalysis(runId)) return
           this.applyResultPayload(res?.data || res || this.result)
         }
+        if (!this.isCurrentAnalysis(runId)) return
         await this.speakResult()
       } catch (error) {
+        if (!this.isCurrentAnalysis(runId)) return
         console.warn('vision json analyze failed', error)
         this.lastError = extractErrorText(error)
         this.streamState = {
@@ -695,28 +716,38 @@ export default {
         }
         throw error
       } finally {
-        this.isAnalyzing = false
+        if (this.isCurrentAnalysis(runId)) {
+          this.isAnalyzing = false
+        }
       }
     },
     async startUploadStreaming(file) {
-      this.prepareAnalysis()
+      if (!this.imageUrl || this.selectedUploadScene !== this.selectedScene) {
+        this.showSceneGuide(this.selectedScene)
+        return
+      }
+      const runId = this.prepareAnalysis()
       try {
         if (canStreamVision() && file) {
           const result = await streamVisionUpload(file, this.selectedScene, {
-            onMeta: (meta) => this.handleStreamMeta(meta),
-            onStatus: (status) => this.handleStreamStatus(status),
-            onPreview: (preview) => this.handleStreamPreview(preview),
-            onResult: (data) => this.applyResultPayload(data),
+            onMeta: (meta) => this.isCurrentAnalysis(runId) && this.handleStreamMeta(meta),
+            onStatus: (status) => this.isCurrentAnalysis(runId) && this.handleStreamStatus(status),
+            onPreview: (preview) => this.isCurrentAnalysis(runId) && this.handleStreamPreview(preview),
+            onResult: (data) => this.isCurrentAnalysis(runId) && this.applyResultPayload(data),
           })
+          if (!this.isCurrentAnalysis(runId)) return
           this.applyResultPayload(result)
         } else {
           // 小程序：走 uni.uploadFile 的非流式上传接口。
           this.markAnalyzing('识图分析', '正在上传并分析图像…')
           const res = await uploadVisionImage(this.imageUrl, this.selectedScene)
+          if (!this.isCurrentAnalysis(runId)) return
           this.applyResultPayload(res?.data || res || this.result)
         }
+        if (!this.isCurrentAnalysis(runId)) return
         await this.speakResult()
       } catch (error) {
+        if (!this.isCurrentAnalysis(runId)) return
         console.warn('vision upload analyze failed', error)
         this.lastError = extractErrorText(error)
         this.streamState = {
@@ -727,42 +758,16 @@ export default {
           badgeText: '参考结果',
         }
       } finally {
-        this.isAnalyzing = false
+        if (this.isCurrentAnalysis(runId)) {
+          this.isAnalyzing = false
+        }
       }
     },
     async changeScene(scene) {
-      if (this.isAnalyzing) return
+      if (scene === this.selectedScene) return
       this.selectedScene = scene
-      this.lastError = ''
-      this.resetStreamState()
-
-      if (this.activeSampleKey && this.currentSample) {
-        try {
-          await this.startJsonStreaming({
-            scene: this.selectedScene,
-            sampleKey: this.currentSample.key,
-          })
-          return
-        } catch (error) {
-          console.warn('reanalyze sample failed', error)
-        }
-      }
-
-      if (this.imageUrl && !this.activeSampleKey) {
-        try {
-          await this.startUploadStreaming(this.selectedUploadFile)
-          return
-        } catch (error) {
-          console.warn('reanalyze upload failed', error)
-        }
-      }
-
-      this.activeSampleKey = ''
-      if (manualOnlyScenes.has(scene)) {
-        this.showSceneGuide(scene)
-        return
-      }
-      this.runDemo()
+      this.clearCurrentImage()
+      this.showSceneGuide(scene)
     },
     onSampleImageError(item) {
       if (!item) return
@@ -783,6 +788,7 @@ export default {
           this.imageUrl = res.tempFilePaths[0]
           this.activeSampleKey = ''
           this.selectedUploadFile = res.tempFiles?.[0]?.file || null
+          this.selectedUploadScene = this.selectedScene
           try {
             await this.startUploadStreaming(this.selectedUploadFile)
           } catch (error) {
@@ -801,6 +807,7 @@ export default {
       this.activeSampleKey = item.key
       this.imageUrl = item.imageUrl
       this.selectedUploadFile = null
+      this.selectedUploadScene = ''
       this.lastError = ''
       try {
         await this.startJsonStreaming({
@@ -811,7 +818,7 @@ export default {
     },
     async runDemo() {
       if (this.isAnalyzing) return
-      if (this.imageUrl && !this.activeSampleKey) {
+      if (this.imageUrl && !this.activeSampleKey && this.selectedUploadScene === this.selectedScene) {
         try {
           await this.startUploadStreaming(this.selectedUploadFile)
           return

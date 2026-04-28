@@ -19,7 +19,8 @@ import java.util.Map;
 public class NewsCandidateExpandService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NewsCandidateExpandService.class);
-    private static final long CANDIDATE_TIME_BUDGET_MILLIS = 7000;
+    private static final long CANDIDATE_TIME_BUDGET_MILLIS = 14000;
+    private static final int MIN_CACHED_SCOPE_ITEMS = 8;
 
     private static final Map<String, String> CITY_PROVINCES = Map.ofEntries(
             Map.entry("广州", "广东"),
@@ -81,7 +82,7 @@ public class NewsCandidateExpandService {
                 deadlineMillis
         ));
 
-        if (hasCandidateFetchTime(deadlineMillis) && candidates.size() < target && !isBlank(resolvedProvince) && !resolvedProvince.equals(resolvedCity)) {
+        if (candidates.size() < target && !isBlank(resolvedProvince) && !resolvedProvince.equals(resolvedCity)) {
             addAll(candidates, fetchScopeWithCache(
                     "PROVINCE",
                     resolvedProvince,
@@ -94,7 +95,7 @@ public class NewsCandidateExpandService {
             ));
         }
 
-        if (hasCandidateFetchTime(deadlineMillis) && candidates.size() < target) {
+        if (candidates.size() < target) {
             addAll(candidates, fetchScopeWithCache(
                     "NATIONAL",
                     "全国",
@@ -160,6 +161,9 @@ public class NewsCandidateExpandService {
     ) {
         LinkedHashMap<String, NewsArticle> items = new LinkedHashMap<>();
         addAll(items, cachedScope(fetchScope, city, province, limit));
+        if (items.size() >= Math.min(limit, MIN_CACHED_SCOPE_ITEMS)) {
+            return new ArrayList<>(items.values());
+        }
         if (items.size() < limit) {
             if (hasCandidateFetchTime(deadlineMillis)) {
                 addAll(items, fetchScope(fetchScope, scopeToken, queries, limit - items.size(), requireScopeMatch, city, province));

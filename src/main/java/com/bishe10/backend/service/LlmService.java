@@ -38,6 +38,7 @@ public class LlmService {
         this.properties = bishe10Properties.getLlm();
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
                 .build();
     }
@@ -112,7 +113,10 @@ public class LlmService {
     }
 
     public boolean isConfigured() {
-        return properties.isEnabled() && properties.getBaseUrl() != null && !properties.getBaseUrl().isBlank();
+        return properties.isEnabled()
+                && hasText(properties.getBaseUrl())
+                && hasText(properties.getApiKey())
+                && hasText(properties.getModel());
     }
 
     public String getModel() {
@@ -129,7 +133,16 @@ public class LlmService {
 
     public boolean isVisionConfigured() {
         String base = properties.resolvedVisionBaseUrl();
-        return properties.isEnabled() && base != null && !base.isBlank();
+        String apiKey = properties.resolvedVisionApiKey();
+        String model = properties.resolvedVisionModel();
+        return properties.isEnabled()
+                && hasText(base)
+                && hasText(apiKey)
+                && hasText(model);
+    }
+
+    private boolean hasText(String text) {
+        return text != null && !text.isBlank();
     }
 
     public Optional<Map<String, Object>> generateNewsDigest(String city, int count, List<String> existingTitles) {
@@ -269,6 +282,7 @@ public class LlmService {
 
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(normalizeBaseUrl(baseUrl) + "/chat/completions"))
+                    .version(HttpClient.Version.HTTP_1_1)
                     .timeout(Duration.ofSeconds(timeoutSec))
                     .header("content-type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body), StandardCharsets.UTF_8));
@@ -321,7 +335,7 @@ public class LlmService {
                 }
             }
 
-            HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = sendStringWithRetry(builder.build());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 LOGGER.warn("LLM request failed with status {}: {}", response.statusCode(), response.body());
                 return Optional.empty();
@@ -348,7 +362,7 @@ public class LlmService {
             Thread.currentThread().interrupt();
             return Optional.empty();
         } catch (IOException error) {
-            LOGGER.warn("LLM request returned invalid payload", error);
+            logLlmIOException("LLM request returned invalid payload", error);
             return Optional.empty();
         } catch (Exception error) {
             LOGGER.warn("LLM request failed", error);
@@ -372,6 +386,7 @@ public class LlmService {
 
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(normalizeBaseUrl(properties.getBaseUrl()) + "/chat/completions"))
+                    .version(HttpClient.Version.HTTP_1_1)
                     .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
                     .header("content-type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body), StandardCharsets.UTF_8));
@@ -380,7 +395,7 @@ public class LlmService {
                 builder.header("authorization", "Bearer " + properties.getApiKey());
             }
 
-            HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = sendStringWithRetry(builder.build());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 LOGGER.warn("LLM text request failed with status {}: {}", response.statusCode(), response.body());
                 return Optional.empty();
@@ -407,12 +422,55 @@ public class LlmService {
             Thread.currentThread().interrupt();
             return Optional.empty();
         } catch (IOException error) {
-            LOGGER.warn("LLM text request returned invalid payload", error);
+            logLlmIOException("LLM text request returned invalid payload", error);
             return Optional.empty();
         } catch (Exception error) {
             LOGGER.warn("LLM text request failed", error);
             return Optional.empty();
         }
+    }
+
+    private HttpResponse<String> sendStringWithRetry(HttpRequest request) throws IOException, InterruptedException {
+        IOException lastError = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                return httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            } catch (IOException error) {
+                lastError = error;
+                if (attempt >= 2 || !isRetryableNetworkError(error)) {
+                    throw error;
+                }
+                LOGGER.warn("LLM request connection ended early, retrying once: {}", error.toString());
+                Thread.sleep(300L);
+            }
+        }
+        throw lastError;
+    }
+
+    private void logLlmIOException(String message, IOException error) {
+        if (isRetryableNetworkError(error)) {
+            LOGGER.warn("{}: upstream connection ended early ({})", message, error.toString());
+            return;
+        }
+        LOGGER.warn(message, error);
+    }
+
+    private boolean isRetryableNetworkError(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof java.io.EOFException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase();
+                if (lower.contains("eof") || lower.contains("connection reset") || lower.contains("closed")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private String buildVisionPrompt(String scene) {
