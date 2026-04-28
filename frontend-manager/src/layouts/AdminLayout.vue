@@ -22,6 +22,10 @@
           <el-icon><Document /></el-icon>
           <span>新闻源管理</span>
         </el-menu-item>
+        <el-menu-item index="/news-algorithm">
+          <el-icon><TrendCharts /></el-icon>
+          <span>新闻算法管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -64,6 +68,7 @@ import {
   ArrowDown,
   Document,
   SwitchButton,
+  TrendCharts,
   UserFilled
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'

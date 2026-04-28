@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import LoginView from '@/views/LoginView.vue'
+import NewsAlgorithmManagerView from '@/views/NewsAlgorithmManagerView.vue'
 import NewsSourceManagerView from '@/views/NewsSourceManagerView.vue'
 import UserManagerView from '@/views/UserManagerView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
@@ -32,6 +33,12 @@ const router = createRouter({
           name: 'newsSources',
           component: NewsSourceManagerView,
           meta: { title: '新闻源管理' }
+        },
+        {
+          path: 'news-algorithm',
+          name: 'newsAlgorithm',
+          component: NewsAlgorithmManagerView,
+          meta: { title: '新闻算法管理' }
         }
       ]
     },
