@@ -169,7 +169,7 @@ public class NewsService {
         }
 
         Map<String, Object> fullPayload = getCityPayload(normalizedCity, now);
-        return paginatePayload(fullPayload, effectivePage, effectivePageSize, resolvedLocation, lat, lng);
+        return paginatePayload(fullPayload, effectivePage, effectivePageSize, resolvedLocation, lat, lng, force);
     }
 
     @SuppressWarnings("unchecked")
@@ -212,7 +212,8 @@ public class NewsService {
             int pageSize,
             LocationResolver.ResolvedLocation loc,
             Double lat,
-            Double lng
+            Double lng,
+            boolean forceWeather
     ) {
         Map<String, Object> out = new LinkedHashMap<>(fullPayload);
         List<Map<String, Object>> fullList = (List<Map<String, Object>>) fullPayload.get("newsList");
@@ -240,7 +241,8 @@ public class NewsService {
         Map<String, Object> weather = weatherService.buildLocalWeather(
                 useGpsWeather ? lat : null,
                 useGpsWeather ? lng : null,
-                loc.city()
+                loc.city(),
+                forceWeather
         );
         out.put("weather", weather);
         out.put("quickEntries", buildQuickEntries(loc.city(), fullList, weather));

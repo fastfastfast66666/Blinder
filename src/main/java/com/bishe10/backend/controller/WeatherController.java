@@ -24,9 +24,10 @@ public class WeatherController {
     public Map<String, Object> localWeather(
             @RequestParam(required = false) String city,
             @RequestParam(required = false) Double lat,
-            @RequestParam(required = false) Double lng
+            @RequestParam(required = false) Double lng,
+            @RequestParam(required = false) Boolean force
     ) {
         LocationResolver.ResolvedLocation resolvedLocation = locationResolver.resolve(lat, lng, city);
-        return ApiResponse.ok(weatherService.buildLocalWeather(lat, lng, resolvedLocation.city()));
+        return ApiResponse.ok(weatherService.buildLocalWeather(lat, lng, resolvedLocation.city(), Boolean.TRUE.equals(force)));
     }
 }

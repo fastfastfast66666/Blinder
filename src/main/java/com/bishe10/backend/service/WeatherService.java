@@ -31,6 +31,7 @@ public class WeatherService {
     private static final Logger LOGGER = LoggerFactory.getLogger(WeatherService.class);
     private static final ZoneId SHANGHAI_ZONE = ZoneId.of("Asia/Shanghai");
     private static final long CACHE_TTL_MINUTES = 10;
+    private static final long FAILED_CACHE_TTL_SECONDS = 30;
     private static final double DEFAULT_LAT = 31.2304;
     private static final double DEFAULT_LNG = 121.4737;
     private static final DateTimeFormatter WEATHER_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -73,9 +74,17 @@ public class WeatherService {
     }
 
     public Map<String, Object> buildLocalWeather(Double latitude, Double longitude, String city) {
+        return buildLocalWeather(latitude, longitude, city, false);
+    }
+
+    public Map<String, Object> buildLocalWeather(Double latitude, Double longitude, String city, boolean force) {
         RequestLocation requestLocation = resolveRequestLocation(latitude, longitude, city);
         String cacheKey = requestLocation.cacheKey();
         OffsetDateTime now = OffsetDateTime.now();
+
+        if (force) {
+            cache.remove(cacheKey);
+        }
 
         CacheEntry cached = cache.get(cacheKey);
         if (cached != null && cached.expiresAt().isAfter(now)) {
@@ -90,7 +99,11 @@ public class WeatherService {
             payload = buildFallbackWeather(requestLocation);
         }
 
-        cache.put(cacheKey, new CacheEntry(copyPayload(payload), now.plusMinutes(CACHE_TTL_MINUTES)));
+        boolean available = Boolean.TRUE.equals(payload.get("available"));
+        OffsetDateTime expiresAt = available
+                ? now.plusMinutes(CACHE_TTL_MINUTES)
+                : now.plusSeconds(FAILED_CACHE_TTL_SECONDS);
+        cache.put(cacheKey, new CacheEntry(copyPayload(payload), expiresAt));
         return payload;
     }
 

@@ -64,6 +64,10 @@ public class PersonalizedNewsService {
     }
 
     public NewsRecommendResponse recommend(String userId, String city, String province, Double lat, Double lng, Integer size, String cursor) {
+        return recommend(userId, city, province, lat, lng, size, cursor, false);
+    }
+
+    public NewsRecommendResponse recommend(String userId, String city, String province, Double lat, Double lng, Integer size, String cursor, boolean forceWeather) {
         int limit = Math.max(1, Math.min(MAX_SIZE, size == null ? DEFAULT_SIZE : size));
         boolean personalized = userId != null && !userId.isBlank();
         NewsCandidateExpandService.CandidateResult candidates = candidateExpandService.buildCandidatePool(
@@ -126,7 +130,8 @@ public class PersonalizedNewsService {
         Map<String, Object> weather = weatherService.buildLocalWeather(
                 useGpsWeather ? lat : null,
                 useGpsWeather ? lng : null,
-                candidates.city()
+                candidates.city(),
+                forceWeather
         );
         return new NewsRecommendResponse(
                 items,
