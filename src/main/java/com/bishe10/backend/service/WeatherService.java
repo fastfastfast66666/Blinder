@@ -160,8 +160,13 @@ public class WeatherService {
             throw new IOException("Weather payload missing current section");
         }
 
-        JsonNode airQualityRoot = sendJson(airQualityUrl);
-        JsonNode airCurrent = airQualityRoot.path("current");
+        JsonNode airCurrent = null;
+        try {
+            JsonNode airQualityRoot = sendJson(airQualityUrl);
+            airCurrent = airQualityRoot.path("current");
+        } catch (Exception error) {
+            LOGGER.warn("Weather air quality request failed for city={}", requestLocation.city(), error);
+        }
 
         int weatherCode = current.path("weather_code").asInt(-1);
         int temperature = roundedInt(current.path("temperature_2m"));
@@ -172,7 +177,7 @@ public class WeatherService {
         int pressure = roundedInt(current.path("pressure_msl"));
         int windSpeed = roundedInt(current.path("wind_speed_10m"));
         int windDirectionDegree = roundedInt(current.path("wind_direction_10m"));
-        int usAqi = airCurrent.path("us_aqi").asInt(-1);
+        int usAqi = airCurrent == null ? -1 : airCurrent.path("us_aqi").asInt(-1);
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("available", true);
@@ -300,6 +305,22 @@ public class WeatherService {
     }
 
     private JsonNode sendJson(String url) throws IOException, InterruptedException {
+        IOException lastError = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                return sendJsonOnce(url);
+            } catch (IOException error) {
+                lastError = error;
+                if (attempt == 2) {
+                    break;
+                }
+                LOGGER.info("Weather provider request failed, retrying attempt={} url={}", attempt, url, error);
+            }
+        }
+        throw lastError;
+    }
+
+    private JsonNode sendJsonOnce(String url) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(weatherRequestTimeout())
