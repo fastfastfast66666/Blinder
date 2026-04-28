@@ -315,7 +315,7 @@ public class WeatherService {
     }
 
     private Duration weatherRequestTimeout() {
-        return Duration.ofSeconds(Math.max(1, Math.min(2, properties.getTimeoutSeconds())));
+        return Duration.ofSeconds(Math.max(1, Math.min(30, properties.getTimeoutSeconds())));
     }
 
     private Optional<GeoProfile> lookupCityProfile(String city) {
