@@ -64,6 +64,10 @@ public class NewsCandidateExpandService {
     }
 
     public CandidateResult buildCandidatePool(String userId, String city, String province, Double lat, Double lng, int size) {
+        return buildCandidatePool(userId, city, province, lat, lng, size, false);
+    }
+
+    public CandidateResult buildCandidatePool(String userId, String city, String province, Double lat, Double lng, int size, boolean forceRefresh) {
         LocationResolver.ResolvedLocation resolved = locationResolver.resolve(lat, lng, city);
         String resolvedCity = normalizeCity(resolved.city());
         String resolvedProvince = normalizeProvince(province, resolvedCity);
@@ -79,7 +83,8 @@ public class NewsCandidateExpandService {
                 true,
                 resolvedCity,
                 resolvedProvince,
-                deadlineMillis
+                deadlineMillis,
+                forceRefresh
         ));
 
         if (candidates.size() < target && !isBlank(resolvedProvince) && !resolvedProvince.equals(resolvedCity)) {
@@ -91,7 +96,8 @@ public class NewsCandidateExpandService {
                     true,
                     resolvedCity,
                     resolvedProvince,
-                    deadlineMillis
+                    deadlineMillis,
+                    forceRefresh
             ));
         }
 
@@ -104,7 +110,8 @@ public class NewsCandidateExpandService {
                     false,
                     resolvedCity,
                     resolvedProvince,
-                    deadlineMillis
+                    deadlineMillis,
+                    forceRefresh
             ));
         }
 
@@ -118,7 +125,8 @@ public class NewsCandidateExpandService {
                         false,
                         resolvedCity,
                         resolvedProvince,
-                        deadlineMillis
+                        deadlineMillis,
+                        forceRefresh
                 ));
                 if (candidates.size() >= target || !hasCandidateFetchTime(deadlineMillis)) {
                     break;
@@ -157,7 +165,8 @@ public class NewsCandidateExpandService {
             boolean requireScopeMatch,
             String city,
             String province,
-            long deadlineMillis
+            long deadlineMillis,
+            boolean forceRefresh
     ) {
         LinkedHashMap<String, NewsArticle> items = new LinkedHashMap<>();
         addAll(items, cachedScope(fetchScope, city, province, limit));

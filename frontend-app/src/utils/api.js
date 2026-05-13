@@ -1,5 +1,6 @@
 const DEFAULT_API_BASE = 'http://127.0.0.1:8080'
 const REQUEST_TIMEOUT_MS = 10000
+const VISION_UPLOAD_TIMEOUT_MS = 60000
 const API_BASE_STORAGE_KEY = 'bishe10_api_base_override_v1'
 const LEGACY_API_BASES = new Set([
   'https://158-247-192-25.sslip.io',
@@ -182,6 +183,7 @@ export function uploadVisionImage(filePath, scene = 'general') {
       url: resolveUrl('/api/vision/analyze'),
       filePath,
       name: 'image',
+      timeout: VISION_UPLOAD_TIMEOUT_MS,
       formData: {
         scene,
       },

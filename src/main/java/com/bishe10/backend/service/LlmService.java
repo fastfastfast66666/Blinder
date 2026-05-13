@@ -461,10 +461,18 @@ public class LlmService {
             if (current instanceof java.io.EOFException) {
                 return true;
             }
+            if (current instanceof javax.net.ssl.SSLHandshakeException
+                    && current.getMessage() != null
+                    && current.getMessage().toLowerCase().contains("remote host terminated")) {
+                return true;
+            }
             String message = current.getMessage();
             if (message != null) {
                 String lower = message.toLowerCase();
-                if (lower.contains("eof") || lower.contains("connection reset") || lower.contains("closed")) {
+                if (lower.contains("eof")
+                        || lower.contains("connection reset")
+                        || lower.contains("closed")
+                        || lower.contains("remote host terminated the handshake")) {
                     return true;
                 }
             }

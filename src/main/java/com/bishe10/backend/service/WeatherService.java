@@ -95,7 +95,7 @@ public class WeatherService {
         try {
             payload = fetchStructuredWeather(requestLocation);
         } catch (Exception error) {
-            LOGGER.warn("Weather request failed for city={}", requestLocation.city(), error);
+            LOGGER.warn("Weather request failed for city={}, using fallback weather: {}", requestLocation.city(), error.getMessage());
             payload = buildFallbackWeather(requestLocation);
         }
 
@@ -178,7 +178,7 @@ public class WeatherService {
             JsonNode airQualityRoot = sendJson(airQualityUrl);
             airCurrent = airQualityRoot.path("current");
         } catch (Exception error) {
-            LOGGER.warn("Weather air quality request failed for city={}", requestLocation.city(), error);
+            LOGGER.info("Weather air quality request failed for city={}, continue without AQI: {}", requestLocation.city(), error.getMessage());
         }
 
         int weatherCode = current.path("weather_code").asInt(-1);
@@ -318,19 +318,7 @@ public class WeatherService {
     }
 
     private JsonNode sendJson(String url) throws IOException, InterruptedException {
-        IOException lastError = null;
-        for (int attempt = 1; attempt <= 2; attempt++) {
-            try {
-                return sendJsonOnce(url);
-            } catch (IOException error) {
-                lastError = error;
-                if (attempt == 2) {
-                    break;
-                }
-                LOGGER.info("Weather provider request failed, retrying attempt={} url={}", attempt, url, error);
-            }
-        }
-        throw lastError;
+        return sendJsonOnce(url);
     }
 
     private JsonNode sendJsonOnce(String url) throws IOException, InterruptedException {
@@ -349,7 +337,7 @@ public class WeatherService {
     }
 
     private Duration weatherRequestTimeout() {
-        return Duration.ofSeconds(Math.max(1, Math.min(30, properties.getTimeoutSeconds())));
+        return Duration.ofSeconds(Math.max(1, Math.min(2, properties.getTimeoutSeconds())));
     }
 
     private Optional<GeoProfile> lookupCityProfile(String city) {
