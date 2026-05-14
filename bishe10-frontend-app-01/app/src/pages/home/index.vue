@@ -637,7 +637,7 @@ export default {
       if (params.province) next.province = params.province
       if (params.lat) next.lat = params.lat
       if (params.lng) next.lng = params.lng
-      if (params.force !== undefined) next.force = params.force
+      if (params.force) next.force = 1
       if (appendMode === 'append' && this.newsList.length) {
         next.cursor = this.newsList
           .map(item => item.articleId)
@@ -915,6 +915,8 @@ export default {
       const city = this.locationContext.city
       this.loadError = false
       this.loading = true
+      this.newsList = []
+      this.pagination = { page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0, totalPages: 1, hasMore: false }
       try {
         await this.fetchNewsFeed(
           { city, page: 1, pageSize: DEFAULT_PAGE_SIZE, force: 1 },
@@ -922,11 +924,8 @@ export default {
         )
         uni.showToast({ title: '已刷新到最新', icon: 'none' })
       } catch (err) {
-        this.loadError = !this.newsList.length
-        uni.showToast({
-          title: this.newsList.length ? '刷新失败，已保留当前内容' : '首页推荐接口暂不可用',
-          icon: 'none',
-        })
+        this.loadError = true
+        uni.showToast({ title: '刷新失败', icon: 'none' })
       } finally {
         this.loading = false
       }
@@ -957,7 +956,7 @@ export default {
       const hadNews = this.newsList.length > 0
       try {
         await this.fetchNewsFeed(
-          { city, page: 1, pageSize: DEFAULT_PAGE_SIZE, force: 1 },
+          { city, page: 1, pageSize: DEFAULT_PAGE_SIZE },
           { city, source: 'manual', permission: 'granted', updatedAt: nowIso() },
         )
       } catch (err) {
@@ -1718,9 +1717,12 @@ export default {
 /* === City picker sheet === */
 .city-mask {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: rgba(26, 26, 26, 0.45);
-  z-index: 900;
+  z-index: 2000;
   display: flex;
   align-items: flex-end;
   justify-content: center;

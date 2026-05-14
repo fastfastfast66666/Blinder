@@ -20,7 +20,8 @@
 </template>
 
 <script>
-const STORAGE_KEY = 'bishe10-demo-dock-prev-index'
+import { stopSpeech, stopVisionStream } from '../utils/api'
+import { navigateToTab } from '../utils/tabNavigation'
 
 export default {
   props: {
@@ -48,9 +49,11 @@ export default {
     go(item, index) {
       if (item.id === this.active) return
       try {
-        uni.setStorageSync(STORAGE_KEY, this.activeIndex)
+        stopVisionStream()
+        stopSpeech()
+        uni.hideLoading()
       } catch (_) {}
-      uni.redirectTo({ url: item.url })
+      navigateToTab(this.activeIndex, index)
     },
   },
 }

@@ -1,6 +1,5 @@
 const DEFAULT_API_BASE = 'http://127.0.0.1:8080'
 const REQUEST_TIMEOUT_MS = 10000
-const VISION_UPLOAD_TIMEOUT_MS = 60000
 const API_BASE_STORAGE_KEY = 'bishe10_api_base_override_v1'
 const LEGACY_API_BASES = new Set([
   'https://158-247-192-25.sslip.io',
@@ -183,7 +182,6 @@ export function uploadVisionImage(filePath, scene = 'general') {
       url: resolveUrl('/api/vision/analyze'),
       filePath,
       name: 'image',
-      timeout: VISION_UPLOAD_TIMEOUT_MS,
       formData: {
         scene,
       },
@@ -408,6 +406,7 @@ function stopAudio() {
 }
 
 let isSpeaking = false
+let speechGeneration = 0
 
 export function getSpeakingState() {
   return isSpeaking
@@ -415,10 +414,14 @@ export function getSpeakingState() {
 
 export async function playSpeech({ text, title = "语音播报", source = "系统播报", recordHistory = true }) {
   stopAudio()
+  const generation = ++speechGeneration
   isSpeaking = true
 
   let audio = null
-  const useWebAudio = typeof Audio !== "undefined"
+  const useWebAudio =
+    typeof window !== "undefined" &&
+    typeof document !== "undefined" &&
+    typeof Audio !== "undefined"
 
   if (useWebAudio) {
     audio = new Audio()
@@ -434,21 +437,37 @@ export async function playSpeech({ text, title = "语音播报", source = "系�
 
   let res
   try {
-    res = await request("/api/voice/synthesize", "POST", {
-      text,
-      title,
-      source,
-      recordHistory,
-    })
+    res = await request(
+      "/api/voice/synthesize",
+      "POST",
+      {
+        text,
+        title,
+        source,
+        recordHistory,
+      },
+      { timeout: 45000 }
+    )
   } catch (err) {
-    isSpeaking = false
+    if (generation === speechGeneration) {
+      isSpeaking = false
+    }
     resolveEnd()
     throw err
   }
 
+  if (generation !== speechGeneration) {
+    stopAudio()
+    isSpeaking = false
+    resolveEnd()
+    throw new Error("speech stopped")
+  }
+
   const payload = res.data || {}
   if (!payload.available || !payload.audioUrl) {
-    isSpeaking = false
+    if (generation === speechGeneration) {
+      isSpeaking = false
+    }
     resolveEnd()
     throw new Error("语音生成失败")
   }
@@ -456,7 +475,9 @@ export async function playSpeech({ text, title = "语音播报", source = "系�
   const audioUrl = resolveUrl(payload.audioUrl)
 
   const finish = () => {
-    isSpeaking = false
+    if (generation === speechGeneration) {
+      isSpeaking = false
+    }
     resolveEnd()
   }
 
@@ -494,6 +515,7 @@ export async function playSpeech({ text, title = "语音播报", source = "系�
 }
 
 export function stopSpeech() {
+  speechGeneration += 1
   stopAudio()
   isSpeaking = false
 }

@@ -4,6 +4,7 @@ const TRANSITION_TTL = 1600
 const PREVIOUS_INDEX_TTL = 5000
 const SWIPE_DISTANCE = 68
 const SWIPE_DIRECTION_RATIO = 1.15
+let navigationLocked = false
 
 export const demoTabs = [
   { id: 'home', url: '/pages/home/index' },
@@ -103,10 +104,30 @@ export function navigateToTab(currentIndex, nextIndex) {
   if (!target || nextIndex === currentIndex) {
     return false
   }
+  if (navigationLocked) {
+    return false
+  }
 
+  navigationLocked = true
   prepareTabTransition(currentIndex, nextIndex)
   uni.redirectTo({
     url: target.url,
+    success: () => {
+      setTimeout(() => {
+        navigationLocked = false
+      }, 300)
+    },
+    fail: (error) => {
+      console.warn('redirect tab failed, retry with reLaunch', error)
+      uni.reLaunch({
+        url: target.url,
+        complete: () => {
+          setTimeout(() => {
+            navigationLocked = false
+          }, 300)
+        },
+      })
+    },
   })
   return true
 }

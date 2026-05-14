@@ -298,13 +298,21 @@ function buildSamplePlaceholder(title = '参考图') {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
+function canUseRemoteImages() {
+  return typeof window !== 'undefined' && typeof document !== 'undefined'
+}
+
+function sampleImageUrl(path, title) {
+  return canUseRemoteImages() ? resolveUrl(path) : buildSamplePlaceholder(title)
+}
+
 const fallbackSamples = [
   {
     key: 'crosswalk-demo',
     title: '十字路口参考图',
     scene: 'crossroad',
     hint: '适合识别路口、斑马线与风险播报。',
-    imageUrl: resolveUrl('/api/vision/samples/crosswalk-demo/image'),
+    imageUrl: sampleImageUrl('/api/vision/samples/crosswalk-demo/image', '十字路口参考图'),
     fallbackImageUrl: buildSamplePlaceholder('十字路口参考图'),
   },
   {
@@ -312,7 +320,7 @@ const fallbackSamples = [
     title: '超市货架参考图',
     scene: 'supermarket',
     hint: '适合识别货架通道、购物车和绕行提示。',
-    imageUrl: resolveUrl('/api/vision/samples/supermarket-demo/image'),
+    imageUrl: sampleImageUrl('/api/vision/samples/supermarket-demo/image', '超市货架参考图'),
     fallbackImageUrl: buildSamplePlaceholder('超市货架参考图'),
   },
 ]
@@ -430,6 +438,7 @@ export default {
       caretBlinkTimer: null,
       caretVisible: true,
       analysisRunId: 0,
+      autoSpokenAnalysisId: 0,
     }
   },
   computed: {
@@ -511,6 +520,11 @@ export default {
   },
   onUnload() {
     stopVisionStream()
+    stopSpeech()
+    if (this.speechLoadingVisible) {
+      uni.hideLoading()
+      this.speechLoadingVisible = false
+    }
     this.resetTypewriter()
     this.stopCaretBlink()
   },
@@ -530,7 +544,14 @@ export default {
         y: touch.clientY,
       } : null)
       this.resetTouch()
-      navigateToTab(1, nextIndex)
+      if (navigateToTab(1, nextIndex)) {
+        stopVisionStream()
+        stopSpeech()
+        if (this.speechLoadingVisible) {
+          uni.hideLoading()
+          this.speechLoadingVisible = false
+        }
+      }
     },
     resetTouch() {
       this.touchStartPoint = null
@@ -540,7 +561,7 @@ export default {
         const res = await getVisionSamples()
         const items = (res.data?.items || []).map((item) => ({
           ...item,
-          imageUrl: resolveUrl(item.imageUrl),
+          imageUrl: sampleImageUrl(item.imageUrl, item.title || '鍙傝€冨浘'),
           fallbackImageUrl: buildSamplePlaceholder(item.title || '参考图'),
         }))
         if (items.length) {
@@ -555,6 +576,12 @@ export default {
     },
     prepareAnalysis() {
       stopVisionStream()
+      stopSpeech()
+      this.speakingVoice = false
+      if (this.speechLoadingVisible) {
+        uni.hideLoading()
+        this.speechLoadingVisible = false
+      }
       const runId = ++this.analysisRunId
       this.isAnalyzing = true
       this.lastError = ''
@@ -702,7 +729,9 @@ export default {
           this.applyResultPayload(res?.data || res || this.result)
         }
         if (!this.isCurrentAnalysis(runId)) return
-        await this.speakResult()
+        this.isAnalyzing = false
+        this.stopCaretBlink()
+        this.autoSpeakResultOnce(runId)
       } catch (error) {
         if (!this.isCurrentAnalysis(runId)) return
         console.warn('vision json analyze failed', error)
@@ -745,7 +774,9 @@ export default {
           this.applyResultPayload(res?.data || res || this.result)
         }
         if (!this.isCurrentAnalysis(runId)) return
-        await this.speakResult()
+        this.isAnalyzing = false
+        this.stopCaretBlink()
+        this.autoSpeakResultOnce(runId)
       } catch (error) {
         if (!this.isCurrentAnalysis(runId)) return
         console.warn('vision upload analyze failed', error)
@@ -780,6 +811,12 @@ export default {
     },
     chooseImage() {
       if (this.isAnalyzing) return
+      stopSpeech()
+      this.speakingVoice = false
+      if (this.speechLoadingVisible) {
+        uni.hideLoading()
+        this.speechLoadingVisible = false
+      }
       uni.chooseImage({
         count: 1,
         sizeType: ['compressed'],
@@ -845,9 +882,20 @@ export default {
       this.targetPreview = this.displayedPreview
       this.stopCaretBlink()
     },
+    async autoSpeakResultOnce(runId) {
+      if (!this.isCurrentAnalysis(runId)) return
+      if (this.autoSpokenAnalysisId === runId) return
+      const spokenText = this.readingScriptText || this.result.voiceBroadcast || this.result.recognizedText
+      if (!spokenText) return
+      this.autoSpokenAnalysisId = runId
+      await this.speakResult()
+    },
     async speakResult() {
       if (this.speakingVoice) {
         stopSpeech()
+        this.analysisRunId += 1
+        this.isAnalyzing = false
+        this.stopCaretBlink()
         this.speakingVoice = false
         if (this.speechLoadingVisible) {
           uni.hideLoading()
@@ -874,7 +922,9 @@ export default {
           await payload.ended
         }
       } catch (error) {
-        uni.showToast({ title: '语音播放失败', icon: 'none' })
+        if (error?.message !== 'speech stopped') {
+          uni.showToast({ title: '语音播放失败', icon: 'none' })
+        }
       } finally {
         if (this.speechLoadingVisible) {
           uni.hideLoading()

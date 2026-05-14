@@ -11,6 +11,10 @@ sogou_shanghai.html
 cp.txt
 temp-*.log
 application-local.properties
+application-*.local.properties
+.env
+.env.*
+!.env.example
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -44,6 +48,8 @@ build/
 .vscode/
 
 ### Frontend ###
+/frontend-app/
+/frontend-manager/
 node_modules/
 dist/
 unpackage/

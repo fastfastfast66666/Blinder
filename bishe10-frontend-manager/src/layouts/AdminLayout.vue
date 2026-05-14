@@ -14,6 +14,14 @@
         text-color="#cbd5e1"
         active-text-color="#ffffff"
       >
+        <el-menu-item index="/dashboard">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>数据总览</span>
+        </el-menu-item>
+        <el-menu-item index="/audit-logs">
+          <el-icon><Tickets /></el-icon>
+          <span>系统日志</span>
+        </el-menu-item>
         <el-menu-item index="/users">
           <el-icon><UserFilled /></el-icon>
           <span>用户管理</span>
@@ -66,8 +74,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   ArrowDown,
+  DataAnalysis,
   Document,
   SwitchButton,
+  Tickets,
   TrendCharts,
   UserFilled
 } from '@element-plus/icons-vue'

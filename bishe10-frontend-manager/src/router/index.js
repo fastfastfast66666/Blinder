@@ -1,9 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import DashboardView from '@/views/DashboardView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NewsAlgorithmManagerView from '@/views/NewsAlgorithmManagerView.vue'
 import NewsSourceManagerView from '@/views/NewsSourceManagerView.vue'
+import SystemAuditLogView from '@/views/SystemAuditLogView.vue'
 import UserManagerView from '@/views/UserManagerView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
@@ -19,9 +21,21 @@ const router = createRouter({
     {
       path: '/',
       component: AdminLayout,
-      redirect: '/users',
+      redirect: '/dashboard',
       meta: { requiresAuth: true },
       children: [
+        {
+          path: 'dashboard',
+          name: 'dashboard',
+          component: DashboardView,
+          meta: { title: '数据总览' }
+        },
+        {
+          path: 'audit-logs',
+          name: 'auditLogs',
+          component: SystemAuditLogView,
+          meta: { title: '系统日志' }
+        },
         {
           path: 'users',
           name: 'users',
@@ -63,7 +77,7 @@ router.beforeEach((to) => {
   }
 
   if (to.name === 'login' && authStore.isAuthenticated) {
-    return { name: 'users' }
+    return { name: 'dashboard' }
   }
 
   return true
