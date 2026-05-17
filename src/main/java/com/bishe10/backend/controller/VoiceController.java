@@ -1,6 +1,7 @@
 package com.bishe10.backend.controller;
 
 import com.bishe10.backend.service.HistoryService;
+import com.bishe10.backend.service.TencentAsrService;
 import com.bishe10.backend.service.TextToSpeechService;
 import com.bishe10.backend.support.ApiResponse;
 import org.springframework.core.io.Resource;
@@ -11,7 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
@@ -20,10 +23,16 @@ public class VoiceController {
 
     private final TextToSpeechService textToSpeechService;
     private final HistoryService historyService;
+    private final TencentAsrService tencentAsrService;
 
-    public VoiceController(TextToSpeechService textToSpeechService, HistoryService historyService) {
+    public VoiceController(
+            TextToSpeechService textToSpeechService,
+            HistoryService historyService,
+            TencentAsrService tencentAsrService
+    ) {
         this.textToSpeechService = textToSpeechService;
         this.historyService = historyService;
+        this.tencentAsrService = tencentAsrService;
     }
 
     @PostMapping("/api/voice/synthesize")
@@ -37,6 +46,14 @@ public class VoiceController {
             historyService.append("voice", title, text, source, text);
         }
         return ApiResponse.ok(payload);
+    }
+
+    @PostMapping(value = "/api/voice/transcribe", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Map<String, Object> transcribe(
+            @RequestParam("audio") MultipartFile audio,
+            @RequestParam(value = "format", required = false) String format
+    ) {
+        return ApiResponse.ok(tencentAsrService.transcribe(audio, format));
     }
 
     @GetMapping("/api/voice/file/{audioId}")

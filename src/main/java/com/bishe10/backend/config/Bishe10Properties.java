@@ -10,6 +10,7 @@ public class Bishe10Properties {
     private final Admin admin = new Admin();
     private final Llm llm = new Llm();
     private final Tts tts = new Tts();
+    private final Asr asr = new Asr();
     private final Location location = new Location();
     private final News news = new News();
     private final Weather weather = new Weather();
@@ -32,6 +33,10 @@ public class Bishe10Properties {
 
     public Tts getTts() {
         return tts;
+    }
+
+    public Asr getAsr() {
+        return asr;
     }
 
     public Location getLocation() {
@@ -432,6 +437,90 @@ public class Bishe10Properties {
 
         public void setProviderLabel(String providerLabel) {
             this.providerLabel = providerLabel;
+        }
+
+        public int getTimeoutSeconds() {
+            return timeoutSeconds;
+        }
+
+        public void setTimeoutSeconds(int timeoutSeconds) {
+            this.timeoutSeconds = timeoutSeconds;
+        }
+    }
+
+    public static class Asr {
+        private boolean enabled = true;
+        private String providerLabel = "Tencent Cloud ASR";
+        private String baseUrl = "https://asr.tencentcloudapi.com";
+        private String secretId = "";
+        private String secretKey = "";
+        private String region = "ap-shanghai";
+        private String engineModelType = "16k_zh";
+        private String voiceFormat = "aac";
+        private int timeoutSeconds = 30;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getProviderLabel() {
+            return providerLabel;
+        }
+
+        public void setProviderLabel(String providerLabel) {
+            this.providerLabel = providerLabel;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getSecretId() {
+            return secretId;
+        }
+
+        public void setSecretId(String secretId) {
+            this.secretId = secretId == null ? "" : secretId;
+        }
+
+        public String getSecretKey() {
+            return secretKey;
+        }
+
+        public void setSecretKey(String secretKey) {
+            this.secretKey = secretKey == null ? "" : secretKey;
+        }
+
+        public String getRegion() {
+            return region;
+        }
+
+        public void setRegion(String region) {
+            this.region = region == null ? "" : region;
+        }
+
+        public String getEngineModelType() {
+            return engineModelType;
+        }
+
+        public void setEngineModelType(String engineModelType) {
+            this.engineModelType = engineModelType == null ? "" : engineModelType;
+        }
+
+        public String getVoiceFormat() {
+            return voiceFormat;
+        }
+
+        public void setVoiceFormat(String voiceFormat) {
+            this.voiceFormat = voiceFormat == null ? "" : voiceFormat;
         }
 
         public int getTimeoutSeconds() {
