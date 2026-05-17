@@ -8,8 +8,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +25,9 @@ public class NewsCandidateExpandService {
     private static final Logger LOGGER = LoggerFactory.getLogger(NewsCandidateExpandService.class);
     private static final long CANDIDATE_TIME_BUDGET_MILLIS = 14000;
     private static final int MIN_CACHED_SCOPE_ITEMS = 8;
+    private static final int MAX_CACHED_ARTICLE_AGE_DAYS = 7;
+    private static final int MAX_FORCE_REFRESH_ARTICLE_AGE_DAYS = 3;
+    private static final ZoneId CHINA_ZONE = ZoneId.of("Asia/Shanghai");
 
     private static final Map<String, String> CITY_PROVINCES = Map.ofEntries(
             Map.entry("广州", "广东"),
@@ -68,6 +75,19 @@ public class NewsCandidateExpandService {
     }
 
     public CandidateResult buildCandidatePool(String userId, String city, String province, Double lat, Double lng, int size, boolean forceRefresh) {
+        return buildCandidatePool(userId, city, province, lat, lng, size, forceRefresh, false);
+    }
+
+    public CandidateResult buildCandidatePool(
+            String userId,
+            String city,
+            String province,
+            Double lat,
+            Double lng,
+            int size,
+            boolean forceRefresh,
+            boolean cacheOnly
+    ) {
         LocationResolver.ResolvedLocation resolved = locationResolver.resolve(lat, lng, city);
         String resolvedCity = normalizeCity(resolved.city());
         String resolvedProvince = normalizeProvince(province, resolvedCity);
@@ -84,7 +104,8 @@ public class NewsCandidateExpandService {
                 resolvedCity,
                 resolvedProvince,
                 deadlineMillis,
-                forceRefresh
+                forceRefresh,
+                cacheOnly
         ));
 
         if (candidates.size() < target && !isBlank(resolvedProvince) && !resolvedProvince.equals(resolvedCity)) {
@@ -97,7 +118,8 @@ public class NewsCandidateExpandService {
                     resolvedCity,
                     resolvedProvince,
                     deadlineMillis,
-                    forceRefresh
+                    forceRefresh,
+                    cacheOnly
             ));
         }
 
@@ -111,11 +133,12 @@ public class NewsCandidateExpandService {
                     resolvedCity,
                     resolvedProvince,
                     deadlineMillis,
-                    forceRefresh
+                    forceRefresh,
+                    cacheOnly
             ));
         }
 
-        if (hasCandidateFetchTime(deadlineMillis) && !isBlank(userId) && candidates.size() < target) {
+        if ((cacheOnly || hasCandidateFetchTime(deadlineMillis)) && !isBlank(userId) && candidates.size() < target) {
             for (String tag : topInterestTags(userId)) {
                 addAll(candidates, fetchScopeWithCache(
                         "INTEREST",
@@ -126,9 +149,10 @@ public class NewsCandidateExpandService {
                         resolvedCity,
                         resolvedProvince,
                         deadlineMillis,
-                        forceRefresh
+                        forceRefresh,
+                        cacheOnly
                 ));
-                if (candidates.size() >= target || !hasCandidateFetchTime(deadlineMillis)) {
+                if (candidates.size() >= target || (!cacheOnly && !hasCandidateFetchTime(deadlineMillis))) {
                     break;
                 }
             }
@@ -166,16 +190,42 @@ public class NewsCandidateExpandService {
             String city,
             String province,
             long deadlineMillis,
-            boolean forceRefresh
+            boolean forceRefresh,
+            boolean cacheOnly
     ) {
         LinkedHashMap<String, NewsArticle> items = new LinkedHashMap<>();
-        addAll(items, cachedScope(fetchScope, city, province, limit));
+
+        if (cacheOnly) {
+            addAll(items, freshEnough(cachedScope(fetchScope, city, province, limit), MAX_FORCE_REFRESH_ARTICLE_AGE_DAYS, false));
+            return new ArrayList<>(items.values());
+        }
+
+        if (forceRefresh) {
+            if (hasCandidateFetchTime(deadlineMillis)) {
+                addAll(items, freshEnough(
+                        fetchScope(fetchScope, scopeToken, freshnessQueries(scopeToken, queries), limit, requireScopeMatch, city, province),
+                        MAX_FORCE_REFRESH_ARTICLE_AGE_DAYS,
+                        false
+                ));
+            }
+
+            if (items.size() < limit) {
+                addAll(items, freshEnough(cachedScope(fetchScope, city, province, limit), MAX_FORCE_REFRESH_ARTICLE_AGE_DAYS, false));
+            }
+            return new ArrayList<>(items.values());
+        }
+
+        addAll(items, freshEnough(cachedScope(fetchScope, city, province, limit), MAX_CACHED_ARTICLE_AGE_DAYS));
         if (items.size() >= Math.min(limit, MIN_CACHED_SCOPE_ITEMS)) {
             return new ArrayList<>(items.values());
         }
+
         if (items.size() < limit) {
             if (hasCandidateFetchTime(deadlineMillis)) {
-                addAll(items, fetchScope(fetchScope, scopeToken, queries, limit - items.size(), requireScopeMatch, city, province));
+                addAll(items, freshEnough(
+                        fetchScope(fetchScope, scopeToken, queries, limit - items.size(), requireScopeMatch, city, province),
+                        MAX_CACHED_ARTICLE_AGE_DAYS
+                ));
             } else {
                 LOGGER.info("skip live news fetch because recommendation response is returning quickly scope={}", fetchScope);
             }
@@ -219,10 +269,50 @@ public class NewsCandidateExpandService {
         }
     }
 
+    private List<String> freshnessQueries(String scopeToken, List<String> baseQueries) {
+        String token = isBlank(scopeToken) ? "新闻" : scopeToken.trim();
+        LocalDate today = LocalDate.now(CHINA_ZONE);
+        String monthDay = today.getMonthValue() + "月" + today.getDayOfMonth() + "日";
+        LinkedHashSet<String> queries = new LinkedHashSet<>();
+        queries.add(token + " " + monthDay + " 新闻");
+        queries.add(token + " 最新 新闻");
+        queries.add(token + " 今日 新闻");
+        queries.add(token + " 刚刚 新闻");
+        if (baseQueries != null) {
+            queries.addAll(baseQueries);
+        }
+        return new ArrayList<>(queries);
+    }
+
+    private List<NewsArticle> freshEnough(List<NewsArticle> articles, int maxAgeDays) {
+        return freshEnough(articles, maxAgeDays, true);
+    }
+
+    private List<NewsArticle> freshEnough(List<NewsArticle> articles, int maxAgeDays, boolean includeUnknownTime) {
+        if (articles == null || articles.isEmpty()) {
+            return List.of();
+        }
+        OffsetDateTime now = OffsetDateTime.now(CHINA_ZONE);
+        return articles.stream()
+                .filter(article -> isFreshEnough(article.publishTime(), now, maxAgeDays, includeUnknownTime))
+                .toList();
+    }
+
+    private boolean isFreshEnough(OffsetDateTime publishTime, OffsetDateTime now, int maxAgeDays, boolean includeUnknownTime) {
+        if (publishTime == null) {
+            return includeUnknownTime;
+        }
+        long ageDays = ChronoUnit.DAYS.between(
+                publishTime.atZoneSameInstant(CHINA_ZONE).toLocalDate(),
+                now.atZoneSameInstant(CHINA_ZONE).toLocalDate()
+        );
+        return ageDays <= Math.max(1, maxAgeDays);
+    }
+
     private NewsArticle toArticle(NewsSourceClient.NewsArticle raw, String fetchScope, String city, String province) {
         String category = category(raw.bucket(), raw.title(), raw.description());
         List<String> tags = tags(category, raw.title(), raw.description(), raw.content());
-        OffsetDateTime publishTime = raw.publishedAt() == null ? OffsetDateTime.now() : raw.publishedAt();
+        OffsetDateTime publishTime = raw.publishedAt();
         String articleId = articleIdGenerator.articleId(raw.source(), raw.url(), raw.title(), publishTime);
         return new NewsArticle(
                 articleId,

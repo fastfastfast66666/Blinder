@@ -68,6 +68,20 @@ public class PersonalizedNewsService {
     }
 
     public NewsRecommendResponse recommend(String userId, String city, String province, Double lat, Double lng, Integer size, String cursor, boolean force) {
+        return recommend(userId, city, province, lat, lng, size, cursor, force, false);
+    }
+
+    public NewsRecommendResponse recommend(
+            String userId,
+            String city,
+            String province,
+            Double lat,
+            Double lng,
+            Integer size,
+            String cursor,
+            boolean force,
+            boolean cacheOnly
+    ) {
         int limit = Math.max(1, Math.min(MAX_SIZE, size == null ? DEFAULT_SIZE : size));
         boolean personalized = userId != null && !userId.isBlank();
         NewsCandidateExpandService.CandidateResult candidates = candidateExpandService.buildCandidatePool(
@@ -77,7 +91,8 @@ public class PersonalizedNewsService {
                 lat,
                 lng,
                 limit,
-                force
+                force,
+                cacheOnly
         );
 
         try {
@@ -114,7 +129,13 @@ public class PersonalizedNewsService {
             scored.add(new ScoredArticle(article, finalScore, base.score(), personal.score(), base.reasons(), personal.reasons(), actions));
         }
 
-        scored.sort(Comparator.comparingDouble(ScoredArticle::finalScore).reversed());
+        scored.sort(
+                Comparator.comparingDouble(ScoredArticle::finalScore).reversed()
+                        .thenComparing(
+                                item -> item.article().publishTime(),
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+        );
         List<ScoredArticle> selected = applyScopeQuota(scored, limit, personalized && !interests.isEmpty());
         List<NewsRecommendItem> items = selected.stream()
                 .map(item -> toItem(item, personalized && interests.isEmpty()))
@@ -132,7 +153,7 @@ public class PersonalizedNewsService {
                 useGpsWeather ? lat : null,
                 useGpsWeather ? lng : null,
                 candidates.city(),
-                force
+                force && !cacheOnly
         );
         return new NewsRecommendResponse(
                 items,

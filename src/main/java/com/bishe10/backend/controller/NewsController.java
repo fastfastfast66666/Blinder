@@ -44,9 +44,20 @@ public class NewsController {
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String cursor,
-            @RequestParam(required = false) Boolean force
+            @RequestParam(required = false) Boolean force,
+            @RequestParam(required = false) Boolean cacheOnly
     ) {
-        return ApiResponse.ok(personalizedNewsService.recommend(userId, city, province, lat, lng, size, cursor, Boolean.TRUE.equals(force)));
+        return ApiResponse.ok(personalizedNewsService.recommend(
+                userId,
+                city,
+                province,
+                lat,
+                lng,
+                size,
+                cursor,
+                Boolean.TRUE.equals(force),
+                Boolean.TRUE.equals(cacheOnly)
+        ));
     }
 
     @PostMapping("/api/news/interpret")

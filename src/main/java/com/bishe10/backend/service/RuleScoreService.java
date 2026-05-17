@@ -77,14 +77,17 @@ public class RuleScoreService {
 
     private double freshness(OffsetDateTime publishTime, OffsetDateTime now) {
         if (publishTime == null) {
-            return 4;
+            return -4;
         }
-        long hours = Math.abs(ChronoUnit.HOURS.between(publishTime, now));
-        if (hours <= 6) return 15;
-        if (hours <= 24) return 12;
-        if (hours <= 72) return 8;
-        if (hours <= 168) return 4;
-        return 1;
+        long hours = ChronoUnit.HOURS.between(publishTime, now);
+        if (hours < 0) {
+            hours = 0;
+        }
+        if (hours <= 6) return 20;
+        if (hours <= 24) return 16;
+        if (hours <= 72) return 10;
+        if (hours <= 168) return 3;
+        return -10;
     }
 
     private double timeFit(NewsArticle article, OffsetDateTime now) {
