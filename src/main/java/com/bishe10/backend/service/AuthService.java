@@ -208,6 +208,20 @@ public class AuthService {
         }
     }
 
+    public Optional<String> resolveUserId(String token) {
+        if (token == null || token.isBlank()) return Optional.empty();
+        String tokenHash = sha256Hex(token.trim());
+        Instant now = Instant.now();
+
+        try (Connection connection = openConnection()) {
+            cleanupExpiredSessions(connection, now);
+            return findUserByTokenHash(connection, tokenHash, now)
+                    .map(user -> String.valueOf(user.id()));
+        } catch (SQLException error) {
+            throw databaseError(error);
+        }
+    }
+
     public Map<String, Object> updateProfile(String token, String nickname) {
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("\u8bf7\u5148\u767b\u5f55\u8d26\u53f7\u3002");
