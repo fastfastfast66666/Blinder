@@ -61,4 +61,16 @@ public class UserBlockRuleRepository extends JdbcRepositorySupport {
             }
         }
     }
+
+    public int deleteByUser(String userId) throws SQLException {
+        if (userId == null || userId.isBlank()) {
+            return 0;
+        }
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "DELETE FROM user_block_rule WHERE user_id = ?")) {
+            statement.setString(1, userId);
+            return statement.executeUpdate();
+        }
+    }
 }

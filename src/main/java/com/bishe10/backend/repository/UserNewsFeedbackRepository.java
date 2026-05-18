@@ -62,4 +62,16 @@ public class UserNewsFeedbackRepository extends JdbcRepositorySupport {
         }
         return result;
     }
+
+    public int deleteByUser(String userId) throws SQLException {
+        if (userId == null || userId.isBlank()) {
+            return 0;
+        }
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "DELETE FROM user_news_feedback WHERE user_id = ?")) {
+            statement.setString(1, userId);
+            return statement.executeUpdate();
+        }
+    }
 }

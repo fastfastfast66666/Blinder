@@ -210,6 +210,13 @@ public class PersonalizedNewsService {
         return userProfileService.profile(userId.trim());
     }
 
+    public UserProfileService.ResetResult resetProfile(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("userId 不能为空。");
+        }
+        return userProfileService.resetToDefault(userId.trim());
+    }
+
     private Optional<NewsArticle> findArticle(String articleId) {
         try {
             return articleRepository.findById(articleId);

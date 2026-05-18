@@ -66,6 +66,18 @@ public class UserInterestProfileRepository extends JdbcRepositorySupport {
         }
     }
 
+    public int deleteByUser(String userId) throws SQLException {
+        if (userId == null || userId.isBlank()) {
+            return 0;
+        }
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "DELETE FROM user_interest_profile WHERE user_id = ?")) {
+            statement.setString(1, userId);
+            return statement.executeUpdate();
+        }
+    }
+
     public UserInterestProfile applyDelta(
             String userId,
             String type,

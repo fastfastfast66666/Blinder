@@ -4,6 +4,7 @@ import com.bishe10.backend.service.AuthService;
 import com.bishe10.backend.support.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
@@ -65,6 +66,16 @@ public class AuthController {
         return authService.resolveMe(token)
                 .map(ApiResponse::ok)
                 .orElseGet(() -> ApiResponse.ok(Map.of("user", (Object) null, "authenticated", false)));
+    }
+
+    @PutMapping("/api/auth/profile")
+    public Map<String, Object> updateProfile(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody(required = false) Map<String, Object> body
+    ) {
+        String token = extractToken(authHeader);
+        String nickname = body == null ? "" : asString(body.get("nickname"));
+        return ApiResponse.ok(authService.updateProfile(token, nickname));
     }
 
     private String extractToken(String authHeader) {

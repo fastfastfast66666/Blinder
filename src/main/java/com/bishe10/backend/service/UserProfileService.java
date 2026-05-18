@@ -7,6 +7,7 @@ import com.bishe10.backend.model.UserBlockRule;
 import com.bishe10.backend.model.UserInterestProfile;
 import com.bishe10.backend.repository.UserBlockRuleRepository;
 import com.bishe10.backend.repository.UserInterestProfileRepository;
+import com.bishe10.backend.repository.UserNewsFeedbackRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,10 +23,16 @@ public class UserProfileService {
 
     private final UserInterestProfileRepository interestRepository;
     private final UserBlockRuleRepository blockRuleRepository;
+    private final UserNewsFeedbackRepository feedbackRepository;
 
-    public UserProfileService(UserInterestProfileRepository interestRepository, UserBlockRuleRepository blockRuleRepository) {
+    public UserProfileService(
+            UserInterestProfileRepository interestRepository,
+            UserBlockRuleRepository blockRuleRepository,
+            UserNewsFeedbackRepository feedbackRepository
+    ) {
         this.interestRepository = interestRepository;
         this.blockRuleRepository = blockRuleRepository;
+        this.feedbackRepository = feedbackRepository;
     }
 
     public List<FeedbackResponse.UpdatedProfile> updateProfileByFeedback(String userId, NewsArticle article, String action) {
@@ -106,6 +113,22 @@ public class UserProfileService {
         return new UserNewsProfileResponse(userId, interests, blockRules);
     }
 
+    public ResetResult resetToDefault(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("userId 不能为空。");
+        }
+        String normalizedUserId = userId.trim();
+        try {
+            int interests = interestRepository.deleteByUser(normalizedUserId);
+            int blockRules = blockRuleRepository.deleteByUser(normalizedUserId);
+            int feedback = feedbackRepository.deleteByUser(normalizedUserId);
+            return new ResetResult(normalizedUserId, interests, blockRules, feedback);
+        } catch (SQLException error) {
+            LOGGER.warn("reset user news profile failed userId={}", normalizedUserId, error);
+            throw new IllegalStateException("推荐偏好重置失败，请确认数据库已初始化。");
+        }
+    }
+
     private Delta delta(String action) {
         return switch (action) {
             case "LIKE" -> new Delta(0.3, 0.2, 0.1, true, false);
@@ -129,6 +152,14 @@ public class UserProfileService {
             double sourceDelta,
             boolean positive,
             boolean negative
+    ) {
+    }
+
+    public record ResetResult(
+            String userId,
+            int clearedInterests,
+            int clearedBlockRules,
+            int clearedFeedback
     ) {
     }
 }

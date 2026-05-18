@@ -208,6 +208,39 @@ public class AuthService {
         }
     }
 
+    public Map<String, Object> updateProfile(String token, String nickname) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("\u8bf7\u5148\u767b\u5f55\u8d26\u53f7\u3002");
+        }
+        String normalizedNickname = normalizeNickname(nickname);
+        String tokenHash = sha256Hex(token.trim());
+        Instant now = Instant.now();
+
+        try (Connection connection = openConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                cleanupExpiredSessions(connection, now);
+                UserRecord current = findUserByTokenHash(connection, tokenHash, now)
+                        .orElseThrow(() -> new IllegalArgumentException("\u767b\u5f55\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002"));
+                updateNickname(connection, current.id(), normalizedNickname);
+                touchSession(connection, tokenHash, now);
+                UserRecord updated = findUserById(connection, current.id())
+                        .orElseThrow(() -> new IllegalStateException("\u7528\u6237\u4fe1\u606f\u66f4\u65b0\u540e\u672a\u627e\u5230\u3002"));
+                connection.commit();
+
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("ok", true);
+                out.put("user", userView(updated));
+                return out;
+            } catch (SQLException | RuntimeException error) {
+                rollbackQuietly(connection);
+                throw error;
+            }
+        } catch (SQLException error) {
+            throw databaseError(error);
+        }
+    }
+
     private Connection openConnection() throws SQLException {
         Bishe10Properties.Auth.Database db = properties.getAuth().getDb();
         if (db.getUrl() == null || db.getUrl().isBlank()) {
@@ -315,6 +348,45 @@ public class AuthService {
                 if (!rs.next()) return Optional.empty();
                 return Optional.of(readUser(rs));
             }
+        }
+    }
+
+    private Optional<UserRecord> findUserById(Connection connection, long userId) throws SQLException {
+        String sql = "SELECT id, email, nickname, password_hash, created_at FROM users WHERE id = ? LIMIT 1";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, userId);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                return Optional.of(readUser(rs));
+            }
+        }
+    }
+
+    private Optional<UserRecord> findUserByTokenHash(Connection connection, String tokenHash, Instant now) throws SQLException {
+        String sql = """
+                SELECT u.id, u.email, u.nickname, u.password_hash, u.created_at
+                FROM auth_sessions s
+                JOIN users u ON u.id = s.user_id
+                WHERE s.token_hash = ? AND s.expires_at > ?
+                LIMIT 1
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, tokenHash);
+            statement.setTimestamp(2, Timestamp.from(now));
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                return Optional.of(readUser(rs));
+            }
+        }
+    }
+
+    private void updateNickname(Connection connection, long userId, String nickname) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE users SET nickname = ?, updated_at = ? WHERE id = ?")) {
+            statement.setString(1, nickname);
+            statement.setTimestamp(2, Timestamp.from(Instant.now()));
+            statement.setLong(3, userId);
+            statement.executeUpdate();
         }
     }
 
@@ -501,6 +573,17 @@ public class AuthService {
     private String defaultNickname(String email) {
         int at = email.indexOf('@');
         return at > 0 ? email.substring(0, at) : email;
+    }
+
+    private String normalizeNickname(String nickname) {
+        if (nickname == null || nickname.isBlank()) {
+            throw new IllegalArgumentException("\u8bf7\u8f93\u5165\u6635\u79f0\u3002");
+        }
+        String normalized = nickname.trim();
+        if (normalized.length() > 100) {
+            throw new IllegalArgumentException("\u6635\u79f0\u4e0d\u80fd\u8d85\u8fc7 100 \u4e2a\u5b57\u7b26\u3002");
+        }
+        return normalized;
     }
 
     private String generateCode() {
